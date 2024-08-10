@@ -23,9 +23,10 @@
 ---@type rainbow_delimiters.strategy
 local strategy
 
-if vim.fn.has 'nvim-0.10' then
+if vim.fn.has 'nvim-0.10' ~= 0 then
 	strategy = require 'rainbow-delimiters.strategy.global2'
+else
+	strategy = require 'rainbow-delimiters.strategy.global1'
 end
-strategy = require 'rainbow-delimiters.strategy.global1'
 
 return strategy
