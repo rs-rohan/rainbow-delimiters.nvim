@@ -19,24 +19,53 @@ local lib   = require 'rainbow-delimiters.lib'
 local util  = require 'rainbow-delimiters.util'
 local log   = require 'rainbow-delimiters.log'
 
+local Stack = require 'rainbow-delimiters.stack'
+local MatchTree = require 'rainbow-delimiters.match-tree'
 
----@param bufnr integer
----@param settings rainbow_delimiters.buffer_settings
-local function on_attach(bufnr, settings)
-	log.trace('global strategy on_attach for buffer %d', bufnr)
-	local parser = settings.parser
-	setup_parser(bufnr, parser, nil)
-end
 
----@param bufnr integer
-local function on_detach(bufnr)
-	log.trace('global strategy on_detach for buffer %d', bufnr)
-end
+---Update highlights for a range. Called every time text is changed.
+---@param bufnr   integer  Buffer number
+---@param changes table   List of node ranges in which the changes occurred
+---@param tree    vim.treesitter.TSTree  TS tree
+---@param lang    string  Language
+local function update_range(bufnr, changes, tree, lang)
+	log.debug('Updated range with changes %s', vim.inspect(changes))
 
----@param bufnr integer
----@param settings rainbow_delimiters.buffer_settings
-local function on_reset(bufnr, settings)
-	log.trace('global strategy on_reset for buffer %d', bufnr)
+	if not lib.enabled_for(lang) then return end
+	if vim.fn.pumvisible() ~= 0 or not lang then return end
+
+	local query = lib.get_query(lang, bufnr)
+	if not query then return end
+
+	---Temporary stack of partial match trees; used to build the final match trees
+	local match_trees = Stack.new()
+	local root_node = tree:root()
+
+	-- Build the match tree
+	for _, change in ipairs(changes) do
+		local start_row, end_row = change[1], change[3] + 1
+		lib.clear_namespace(bufnr, lang, start_row, end_row)
+
+		for _, match in query:iter_matches(root_node, bufnr, start_row, end_row, {all=true}) do
+			---@type rainbow_delimiters.MatchTree
+			local this = MatchTree.assemble(query, match)
+			while match_trees:size() > 0 do
+				local other = match_trees:pop()
+				local range = {other.match.container:range()}
+				if vim.treesitter.node_contains(this.match.container, range) then
+					this.children:add(other)
+				else
+					match_trees:push(other)
+					break
+				end
+			end
+			match_trees:push(this)
+		end
+	end
+
+	for _, match_tree in match_trees:iter() do
+		MatchTree.highlight(match_tree, bufnr, lang, 1)
+	end
 end
 
 ---Sets up all the callbacks and performs an initial highlighting
@@ -65,9 +94,15 @@ local function setup_parser(bufnr, parser, start_parent_lang)
 			-- Collect changes to pass on to the next step; might have to treat
 			-- injected languages differently.
 			--
+			-- TODO
 			-- Clear extmarks if a line has been moved across languages
 			--
+			-- TODO
 			-- Update the range
+			-- only update highlighting if we have changes
+			if changes[1] then
+				update_range(bufnr, changes, tree, lang)
+			end
 		end
 
 		---New languages can be added into the text at some later time, e.g.
@@ -90,13 +125,26 @@ local function setup_parser(bufnr, parser, start_parent_lang)
 	util.for_each_child(start_parent_lang, parser:lang(), parser, f)
 end
 
----Update highlights for a range. Called every time text is changed.
----@param bufnr   integer  Buffer number
----@param changes table   List of node ranges in which the changes occurred
----@param tree    vim.treesitter.TSTree  TS tree
----@param lang    string  Language
-local function update_range(bufnr, changes, tree, lang)
+
+---@param bufnr integer
+---@param settings rainbow_delimiters.buffer_settings
+local function on_attach(bufnr, settings)
+	log.trace('global strategy on_attach for buffer %d', bufnr)
+	local parser = settings.parser
+	setup_parser(bufnr, parser, nil)
 end
+
+---@param bufnr integer
+local function on_detach(bufnr)
+	log.trace('global strategy on_detach for buffer %d', bufnr)
+end
+
+---@param bufnr integer
+---@param settings rainbow_delimiters.buffer_settings
+local function on_reset(bufnr, settings)
+	log.trace('global strategy on_reset for buffer %d', bufnr)
+end
+
 
 ---Strategy which highlights all delimiters in the current buffer.
 ---@type rainbow_delimiters.strategy
