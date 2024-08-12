@@ -68,6 +68,19 @@ local function update_range(bufnr, changes, tree, lang)
 	end
 end
 
+---Update highlights for every tree in given buffer.
+---@param bufnr integer # Buffer number
+---@param parser vim.treesitter.LanguageTree
+local function full_update(bufnr, parser)
+	log.debug('Performing full updated on buffer %d', bufnr)
+	local function callback(tree, sub_parser)
+		local changes = {{tree:root():range()}}
+		update_range(bufnr, changes, tree, sub_parser:lang())
+	end
+
+	parser:for_each_tree(callback)
+end
+
 ---Sets up all the callbacks and performs an initial highlighting
 ---@param bufnr integer # Buffer number
 ---@param parser vim.treesitter.LanguageTree
@@ -123,6 +136,8 @@ local function setup_parser(bufnr, parser, start_parent_lang)
 	-- which may have child languages of their own.  We need to set up the
 	-- parser for each of them.
 	util.for_each_child(start_parent_lang, parser:lang(), parser, f)
+
+	full_update(bufnr, parser)
 end
 
 
