@@ -23,6 +23,24 @@ local Stack = require 'rainbow-delimiters.stack'
 local MatchTree = require 'rainbow-delimiters.match-tree'
 
 
+---Changes are range objects and come in two variants: one with four entries and
+---one with six entries.  We only want the four-entry variant.  See
+---`:h TSNode:range()`
+---@param change integer[]
+---@return integer[]
+local function normalize_change(change)
+	local result
+	if #change == 4 then
+		result = change
+	elseif #change == 6 then
+		result = {change[1], change[2], change[4], change[5]}
+	else
+		result = {}
+	end
+	return result
+end
+
+
 ---Update highlights for a range. Called every time text is changed.
 ---@param bufnr   integer  Buffer number
 ---@param changes table   List of node ranges in which the changes occurred
@@ -103,10 +121,25 @@ local function setup_parser(bufnr, parser, start_parent_lang)
 			-- callback, so we use this check to abort
 			if not lib.buffers[bufnr] then return end
 
-			-- TODO
 			-- Collect changes to pass on to the next step; might have to treat
 			-- injected languages differently.
-			--
+			if not parent_lang then
+				-- If we have no parent language, then we use changes, otherwise we use the
+				-- whole tree's range.
+				-- Normalize the changes object if we have no parent language (the one we
+				-- get from on_changedtree)
+				changes = vim.tbl_map(normalize_change, changes)
+			elseif parent_lang ~= lang and changes[1] then
+				-- We have a parent language, so we are in an injected language code
+				-- block, thus we update all of the current code block
+				changes = {{tree:root():range()}}
+			else
+				-- some languages (like rust) use injections of the language itself for
+				-- certain functionality (e.g., macros in rust).  For these the
+				-- highlighting will be updated by the non-injected language part of the
+				-- code.
+				changes = {}
+			end
 			-- TODO
 			-- Clear extmarks if a line has been moved across languages
 			--
