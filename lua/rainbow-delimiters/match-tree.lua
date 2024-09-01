@@ -21,12 +21,41 @@ local Set = require 'rainbow-delimiters.set'
 ---A hierarchical structure of nested matches.  Each node of the tree consists
 ---of exactly one match and a set of any number of child matches.  Terminal
 ---matches have no children.
+---
+---Match trees have a strict partial ordering: for two matches `m1` and `m2` we
+---say that `m1` < `m2` if and only if the container of `m1` contains the
+---container of `m2`, i.e. `m1` is an ancestor of `m2`.  The root node will
+---have the lowest value.
 ---@class rainbow_delimiters.MatchTree
 ---The match object
 ---@field public match rainbow_delimiters.Match
 ---The children of the match
 ---@field public children rainbow_delimiters.Set
 
+
+local mt = {
+	---@param m1 rainbow_delimiters.MatchTree
+	---@param m2 rainbow_delimiters.MatchTree
+	---@return boolean
+	__lt = function(m1, m2)
+		local c1 = m1.match.container
+		local r2 = {m2.match.container:range()}
+		return vim.treesitter.node_contains(c1, r2)
+	end,
+	---Appends the given match tree `m2` to this match tree.  Will traverse
+	---through the descendants until it finds the most appropriate one.
+	---@return boolean success  Whether appending was successfull
+	__call = function(self, other)
+		if not (self < other) then return false end
+		for child in self.children:items() do
+			if child < other then
+				return child(other)
+			end
+		end
+		self.children:add(other)
+		return true
+	end
+}
 
 ---Instantiate a new match tree node without children based on the results of
 ---the `iter_matches` method of a query.
@@ -50,10 +79,11 @@ function M.assemble(query, match)
 	end
 
 	---@type rainbow_delimiters.MatchTree
-	return {
+	local matchtree = {
 		match = result,
 		children = Set.new(),
 	}
+	return setmetatable(matchtree, mt)
 end
 
 ---Apply highlighting to a given match tree at a given level

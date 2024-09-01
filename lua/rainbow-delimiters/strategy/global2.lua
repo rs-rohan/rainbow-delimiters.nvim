@@ -70,9 +70,8 @@ local function update_range(bufnr, changes, tree, lang)
 			local this = MatchTree.assemble(query, match)
 			while match_trees:size() > 0 do
 				local other = match_trees:pop()
-				local range = {other.match.container:range()}
-				if vim.treesitter.node_contains(this.match.container, range) then
-					this.children:add(other)
+				if this < other then
+					this(other)
 				else
 					match_trees:push(other)
 					break
