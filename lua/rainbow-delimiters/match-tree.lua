@@ -32,8 +32,17 @@ local Set = require 'rainbow-delimiters.set'
 ---The children of the match
 ---@field public children rainbow_delimiters.Set
 
+local match_mt = {
+	__tostring = function(self)
+		return string.format(
+			'{container = %s, delimiters = %s}',
+			tostring(self.container),
+			tostring(self.delimiters)
+		)
+	end
+}
 
-local mt = {
+local tree_mt = {
 	---@param m1 rainbow_delimiters.MatchTree
 	---@param m2 rainbow_delimiters.MatchTree
 	---@return boolean
@@ -54,6 +63,13 @@ local mt = {
 		end
 		self.children:add(other)
 		return true
+	end,
+	__tostring = function(self)
+		return string.format(
+			'{match = %s, children = %s}',
+			tostring(self.match),
+			tostring(self.children)
+		)
 	end
 }
 
@@ -80,10 +96,10 @@ function M.assemble(query, match)
 
 	---@type rainbow_delimiters.MatchTree
 	local matchtree = {
-		match = result,
+		match = setmetatable(result, match_mt),
 		children = Set.new(),
 	}
-	return setmetatable(matchtree, mt)
+	return setmetatable(matchtree, tree_mt)
 end
 
 ---Apply highlighting to a given match tree at a given level
