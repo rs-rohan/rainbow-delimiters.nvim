@@ -57,11 +57,11 @@ local function update_range(bufnr, changes, tree, lang)
 	if not query then return end
 
 	---Temporary stack of partial match trees; used to build the final match trees
-	local match_trees = Stack.new()
 	local root_node = tree:root()
 
 	-- Build the match tree
 	for _, change in ipairs(changes) do
+		local match_trees = Stack.new()
 		local start_row, end_row = change[1], change[3] + 1
 		lib.clear_namespace(bufnr, lang, start_row, end_row)
 
@@ -79,10 +79,9 @@ local function update_range(bufnr, changes, tree, lang)
 			end
 			match_trees:push(this)
 		end
-	end
-
-	for _, match_tree in match_trees:iter() do
-		MatchTree.highlight(match_tree, bufnr, lang, 1)
+		for _, match_tree in match_trees:iter() do
+			MatchTree.highlight(match_tree, bufnr, lang, 1)
+		end
 	end
 end
 
